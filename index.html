@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" type="image/png" href="img/icone.png">
+<link rel="apple-touch-icon" href="img/icone.png">
+<title>Stockage ferrailles, zone AT1 – flux amont</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Carlito:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-role="viewer">
+<div class="modal" id="confirm" hidden role="dialog" aria-modal="true" aria-labelledby="cTitle">
+  <div class="mbox"><h3 id="cTitle">Confirmer</h3><div id="cText" class="mtext"></div>
+    <div class="mbtns"><button class="btn" id="cCancel" type="button">Annuler</button><button class="btn primary" id="cOk" type="button">Valider</button></div></div>
+</div>
+<div class="modal" id="bulk" hidden role="dialog" aria-modal="true" aria-labelledby="bTitle">
+  <div class="mbox wide"><h3 id="bTitle">Modification en masse du plan de rangement</h3>
+    <ol class="steps">
+      <li><b>Téléchargez le modèle Excel</b>, pré-rempli avec toutes les références du portique et des cantilevers.<br><button class="btn" id="bModel" type="button">Télécharger le modèle</button></li>
+      <li><b>Remplissez-le</b> : nouvelle adresse (par exemple MIL-T2-004 ou POR-012, plusieurs adresses séparées par des virgules), désignation, longueur, classe, barres, poids. Mettez SUPPRIMER dans la colonne Action pour retirer une référence, ajoutez une ligne avec un nouveau code pour en créer une. Laissez une cellule vide pour ne rien changer.</li>
+      <li><b>Chargez le fichier rempli</b> (.xlsx ou .csv), ou collez les lignes copiées depuis Excel, titres compris.<br>
+        <input type="file" id="bFile" accept=".xlsx,.xls,.csv"> <textarea id="bPaste" rows="3" placeholder="Collez ici les lignes copiées depuis Excel (avec la ligne de titres)"></textarea>
+        <button class="btn" id="bRead" type="button">Analyser</button></li>
+    </ol>
+    <div id="bReport" class="breport"></div>
+    <div class="mbtns"><button class="btn" id="bClose" type="button">Fermer</button><button class="btn primary" id="bApply" type="button" disabled>Appliquer les modifications</button></div>
+  </div>
+</div>
+<div class="shell">
+  <button class="sideToggle" id="sideToggle" type="button" aria-expanded="true" aria-controls="sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <aside class="side" id="sidebar" aria-label="Filtres et réglages">
+    <div class="brand">
+      <img class="logo" src="img/logo-sncf-reseau.jpg" alt="SNCF Réseau" width="110" height="78">
+      <h1>Stockage ferrailles</h1>
+      <div class="badges"><span class="badge zone">Zone AT1</span><span class="badge flux">Flux amont</span></div>
+    </div>
+    <div class="stripe" aria-hidden="true"></div>
+    <div class="actions">
+      <button class="export" id="exportBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Exporter le rapport</button>
+      <button class="theme" id="themeBtn" type="button" aria-label="Changer de thème"><svg id="themeIco" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></svg><span id="themeTxt">Mode sombre</span></button>
+    </div>
+    <p class="note" id="exportMsg" role="status" style="margin:-6px 0 0"></p>
+    <div class="role" id="roleBadge" role="status"><span class="dot"></span><span id="roleTxt">Vérification des droits…</span></div>
+
+    <section class="grp" aria-label="Filtres">
+      <h2>Filtres</h2>
+      <div style="height:10px"></div>
+      <div class="f search"><label for="fS">Rechercher une référence</label><input id="fS" list="codes" placeholder="Code ou désignation" autocomplete="off"><datalist id="codes"></datalist></div>
+      <div class="f"><label for="fZone">Zone</label><select id="fZone"><option value="">Toutes</option><option value="P">Sous le portique</option><option value="M">Cantilevers milieu</option><option value="E">Cantilevers Est</option></select></div>
+      <div class="f"><label for="fK">Classe ABC</label><select id="fK"><option value="">Toutes</option><option value="A">Classe A</option><option value="B">Classe B</option><option value="C">Classe C</option><option value="Sans historique">Sans historique</option></select></div>
+      <div class="f"><label for="fL">Longueur</label><select id="fL"><option value="">Toutes</option><option value="6">6 m</option><option value="12">12 m</option><option value="14">14 m</option><option value="15">15 m</option></select></div>
+      <div class="f"><label for="fN">Niveau de cantilever</label><select id="fN"><option value="">Tous</option></select></div>
+      <button class="btn" id="reset" type="button" style="width:100%">Effacer les filtres</button>
+    </section>
+
+    <details class="grp sidecard" open><summary><h2>Éléments affichés</h2></summary>
+      <label class="chk"><input type="checkbox" data-layer="charges" checked>Fardeaux</label>
+      <label class="chk"><input type="checkbox" data-layer="roofs" checked>Toits</label>
+      <label class="chk"><input type="checkbox" data-layer="walls" checked>Murs, portes et fenêtres</label>
+      <label class="chk"><input type="checkbox" data-layer="cranes" checked>Portiques et ponts roulants</label>
+      <label class="chk"><input type="checkbox" data-layer="vehicles" checked>Véhicules</label>
+      <label class="chk"><input type="checkbox" data-layer="workers" checked>Opérateurs</label>
+      <label class="chk"><input type="checkbox" data-layer="items" checked>Autres équipements</label>
+      <label class="chk"><input type="checkbox" data-layer="labels" checked>Étiquettes</label>
+      <label class="chk"><input type="checkbox" data-layer="cotes" checked>Cotes</label>
+      <div class="racks" id="rackBtns"></div>
+      <p class="note" id="rackNote">Toucher une travée pour retirer ou remettre un cantilever.</p>
+    </details>
+
+    <details class="grp sidecard" open><summary><h2>Météo et heure</h2></summary>
+      <div class="wx" id="wx"><button type="button" data-wx="soleil">Soleil</button><button type="button" data-wx="nuages">Soleil et nuages</button><button type="button" data-wx="couvert">Couvert</button><button type="button" data-wx="pluie">Pluie</button></div>
+      <div class="range"><label for="hour">Heure</label><input id="hour" type="range" min="6" max="20" step="0.25" value="14"><output id="hourOut">14 h 00</output></div>
+    </details>
+
+    <details class="grp sidecard" open><summary><h2>Modifications</h2></summary>
+      <p class="note" style="margin-top:0" id="movesNote"></p><ol class="moves" id="movesList"></ol>
+      <div style="display:flex; gap:8px; flex-wrap:wrap"><button class="btn" id="copyMoves" type="button">Copier la liste</button><button class="btn" id="undoMoves" type="button">Revenir au plan du classeur</button></div>
+      <div id="pubBtns" style="gap:8px; flex-wrap:wrap; margin-top:8px"><button class="btn" id="exportPlan" type="button" style="background:var(--steel); border-color:var(--steel); color:#fff">Exporter plan.js pour publication</button><button class="btn" id="resetDraft" type="button">Revenir au plan publié</button></div>
+    </details>
+  </aside>
+
+  <div class="mainp">
+    <section class="topbar" aria-label="Chiffres clés">
+      <div class="kpis" id="kpis"></div>
+      <div class="card"><h2>Occupation des emplacements</h2><div class="donut" id="donut"></div><div class="bars" id="occBars" style="margin-top:6px"></div></div>
+      <div class="card"><h2>Références par classe</h2><div class="bars" id="bars"></div></div>
+    </section>
+
+    <main class="view">
+      <div class="stage" id="stage">
+        <canvas id="c3d" aria-label="Vue 3D de la zone de stockage"></canvas>
+        <div class="views" role="group" aria-label="Vues">
+          <button type="button" data-view="plan" aria-pressed="false">Plan 2D</button>
+          <button type="button" data-view="global" aria-pressed="true">3D vue globale</button>
+          <button type="button" data-view="walk" aria-pressed="false">3D vue marchant</button>
+          <span class="sep" aria-hidden="true"></span>
+          <button type="button" data-view="P" aria-pressed="false">Portique</button>
+          <button type="button" data-view="M" aria-pressed="false">Cantilevers milieu</button>
+          <button type="button" data-view="E" aria-pressed="false">Cantilevers Est</button>
+        </div>
+        <div class="scale" id="legend3d"></div>
+        <div class="banner" id="banner" role="status"><span id="bannerTxt"></span><button type="button" id="bannerCancel">Annuler</button></div>
+        <div class="info" id="info" aria-live="polite"></div>
+        <div class="tip" id="tip"></div>
+        <div class="joy" id="joy" aria-hidden="true"><div class="knob" id="knob"></div></div>
+        <div class="hint" id="hint"></div>
+      </div>
+    </main>
+
+  <section class="plan" id="plan" aria-label="Plan de rangement">
+    <div class="bar">
+      <h2>Plan de rangement</h2>
+      <span class="msg" id="planMsg" role="status"></span>
+      <input id="planSearch" placeholder="Filtrer : code, désignation, adresse" autocomplete="off">
+      <button class="btn primary" id="addOpen" type="button">Ajouter une référence</button>
+      <button class="btn" id="bulkOpen" type="button">Modification en masse</button>
+      <button class="btn" id="copyTable" type="button">Copier le tableau</button>
+    </div>
+    <div class="addform" id="addForm">
+      <div class="f"><label for="aCode">Code</label><input id="aCode" placeholder="71020999"></div>
+      <div class="f" style="flex:2; min-width:200px"><label for="aDes">Désignation</label><input id="aDes" placeholder="PLAT-ACIER-50X5-6M"></div>
+      <div class="f"><label for="aLen">Longueur</label><select id="aLen"><option value="6">6 m</option><option value="12">12 m</option><option value="14">14 m</option><option value="15">15 m</option></select></div>
+      <div class="f"><label for="aK">Classe</label><select id="aK"><option>A</option><option>B</option><option selected>C</option><option>Sans historique</option></select></div>
+      <div class="f"><label for="aBars">Nombre de barres</label><input id="aBars" type="number" min="0" value="20"></div>
+      <div class="f"><label for="aW">Poids total (kg)</label><input id="aW" type="number" min="0" value="500"></div>
+      <div class="f"><label for="aN">Emplacements</label><select id="aN"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <div class="f"><label for="aSlot">Adresse</label><select id="aSlot"></select></div>
+      <button class="btn primary" id="addSave" type="button">Ajouter</button>
+      <button class="btn" id="addCancel" type="button">Annuler</button>
+    </div>
+    <div class="scroll"><table><thead><tr><th>Code</th><th>Désignation</th><th>Longueur</th><th>Classe</th><th>Zone</th><th id="thAddr">Adresse</th><th class="num">Barres</th><th class="num">Poids (kg)</th><th class="num">Charge par empl. (kg)</th><th>Actions</th></tr></thead><tbody id="planBody"></tbody></table></div>
+  </section>
+
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>window.AT1_MODE = "consultation";</script>
+<script src="data.js"></script>
+<script src="plan.js?v=1"></script>
+<script src="vehicules.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
